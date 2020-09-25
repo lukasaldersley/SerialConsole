@@ -1,13 +1,34 @@
-import javax.swing.*;
-import java.awt.*;
-import java.awt.event.*;
+import java.awt.BorderLayout;
+import java.awt.Dimension;
+import java.awt.FlowLayout;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.awt.event.KeyEvent;
+import java.awt.event.KeyListener;
+import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.FileWriter;
+import java.io.InputStreamReader;
+import java.net.URL;
+import java.nio.channels.Channels;
+import java.nio.channels.ReadableByteChannel;
+
+import javax.swing.Box;
+import javax.swing.JButton;
+import javax.swing.JComboBox;
+import javax.swing.JFileChooser;
+import javax.swing.JFrame;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTextArea;
+import javax.swing.JTextField;
 
 import com.fazecast.jSerialComm.*;
 
 public class SerialConsole implements ActionListener, KeyListener {
+	public static final String VERSION = "1.0.0";
 	private JFrame mainWindow;
 	private Box inputBox;
 	private JScrollPane outputScroller;
@@ -39,9 +60,8 @@ public class SerialConsole implements ActionListener, KeyListener {
 
 	private SerialPortDataListener spdl;
 
-	public static void main(String[] args) {
-		new SerialConsole();
-	}
+	public static String projectUri = "https://raw.githubusercontent.com/lukasaldersley/SerialConsole/";
+	public static String branch = "master";
 
 	public void setupSerial() {
 		ports = SerialPort.getCommPorts();
