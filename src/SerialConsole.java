@@ -8,27 +8,28 @@ import java.awt.event.KeyListener;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.FileWriter;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URL;
-import java.nio.channels.Channels;
-import java.nio.channels.ReadableByteChannel;
+import java.util.Properties;
 
 import javax.swing.Box;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
+import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 
-import com.fazecast.jSerialComm.*;
+import com.fazecast.jSerialComm.SerialPort;
+import com.fazecast.jSerialComm.SerialPortDataListener;
+import com.fazecast.jSerialComm.SerialPortEvent;
 
 public class SerialConsole implements ActionListener, KeyListener {
-	public static final String VERSION = "1.0.0";
 	private JFrame mainWindow;
 	private Box inputBox;
 	private JScrollPane outputScroller;
@@ -60,8 +61,35 @@ public class SerialConsole implements ActionListener, KeyListener {
 
 	private SerialPortDataListener spdl;
 
-	public static String projectUri = "https://raw.githubusercontent.com/lukasaldersley/SerialConsole/";
-	public static String branch = "master";
+	public static void main(String[] args) {
+		Properties properties = System.getProperties();
+		// Java 8
+		properties.forEach((k, v) -> System.out.println(k + ":" + v));
+		if (args.length > 0) {
+			if (args[0].equals("UPDATED_LIB")) {
+				new SerialConsole(false, true, "", "", args[1], args[2]);
+			} else if (args[0].equals("UPDATED_SELF")) {
+				new SerialConsole(true, false, args[1], args[2], "", "");
+			} else if (args[0].equals("UPDATED_BOTH")) {
+				new SerialConsole(true, true, args[1], args[2], args[3], args[4]);
+			}
+			else {
+				new SerialConsole(false, false, "", "", "", "");
+			}
+		} else {
+			JFrame f=new JFrame();
+			f.setUndecorated(true);
+			f.add(new JLabel("PLEASE WAIT - SerialMonitor is looking for Updates"));
+			f.setSize(300, 60);
+			f.validate();
+			f.setLocationRelativeTo(null);
+			f.setVisible(true);
+			checkForLibUpdate();
+			f.setVisible(false);
+			new SerialConsole(false, false, "", "", "", "");
+			f.dispose();
+		}
+	}
 
 	public void setupSerial() {
 		ports = SerialPort.getCommPorts();
@@ -78,6 +106,69 @@ public class SerialConsole implements ActionListener, KeyListener {
 					: nm + " (" + ports[i].getSystemPortName() + ")";
 		}
 		connectDisconnectButton.setEnabled(true);
+	}
+
+	private static void checkForLibUpdate() {
+		File f = new File("SerialConsole_lib");
+		if (f.exists()) {// if the file doesn't exist, this is runnig straight from an IDE or with an
+							// explicit classpath set => "included" library verion doesn't matter => don't
+							// attempt to update
+			String libDownloadPath = "https://github.com";
+			String libVersion = "";
+
+			try {
+				BufferedReader br = new BufferedReader(new InputStreamReader(new URL("https://github.com/Fazecast/jSerialComm/releases/latest").openStream()));
+				String line = br.readLine();
+				while (line != null) {
+					if (line.contains(".jar\"")) {
+						libDownloadPath += line.substring(line.indexOf("/Fazecast"),
+								line.indexOf("\" rel=\"nofollow\""));
+						libVersion = libDownloadPath.substring(libDownloadPath.indexOf("jSerialComm-") + 12,libDownloadPath.indexOf(".jar"));
+						break;
+					}
+					line = br.readLine();
+				}
+			} catch (IOException e) {
+				e.printStackTrace();
+				return;//couldn't get/parse update information => abort check
+			}
+
+			boolean newerVersionAvailable = false;
+			String oldVersion = SerialPort.getVersion();
+			String[] remote = libVersion.split("\\.");
+			String[] local = oldVersion.split("\\.");
+			for (int i = 0; i < 3; i++) {
+				int rm = Integer.parseInt(remote[i]);
+				int lc = Integer.parseInt(local[i]);
+				System.out.println(remote[i]+"|"+local[i]);
+				if (rm > lc) {
+					newerVersionAvailable = true;
+					break;
+				} else if (rm < lc) {
+					break;//the local verion is MORE current than the remote version => CERTAINLY no update needed (this isn't going to happen)
+				}
+			}
+			if (newerVersionAvailable) {
+				f = new File("SerialConsole_lib/jSerialComm.jar");
+				f.renameTo(new File("SerialConsole_lib/jSerialComm_old.jar"));
+				f = new File("SerialConsole_lib/jSerialComm_old.jar");//probably unneccessary but I don't really care
+				if (Tools.downloadJarfile(libDownloadPath, "SerialConsole_lib/jSerialComm.jar")) {
+					f.delete();//dowload succeded => delete old version
+					try {
+						Runtime.getRuntime()
+								.exec("java -jar SerialConsole.jar UPDATED_LIB " + oldVersion + " " + libVersion);
+						System.exit(0);
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
+				} else {
+					f.renameTo(new File("SerialConsole_lib/jSerialComm.jar"));//download failed => restore old version
+				}
+			}
+		}
+		else {
+			System.out.println("running out of IDE => skipping version checks");
+		}
 	}
 
 	public void refreshPorts() {
@@ -100,7 +191,8 @@ public class SerialConsole implements ActionListener, KeyListener {
 		portSelection.setSelectedIndex(0);
 	}
 
-	public SerialConsole() {
+	public SerialConsole(boolean selfUpdated,boolean libUpdated,String selfOldVer,String selfNewVer,String libOldVer,String libNewVer) {
+		System.out.println("Using jSerialComm verion: "+SerialPort.getVersion());
 		/// create and setup top bar
 		inputBox = Box.createHorizontalBox();
 		inputBox.add(Box.createHorizontalGlue());
@@ -204,6 +296,13 @@ public class SerialConsole implements ActionListener, KeyListener {
 				}
 			}
 		};
+
+		if (selfUpdated) {
+			append("--Updated SerialConsole from version " + selfOldVer + " to version " + selfNewVer + " --\r\n");
+		}
+		if (libUpdated) {
+			append("--Updated jSerialComm library from version " + libOldVer + " to version " + libNewVer + " --\r\n");
+		}
 	}
 
 	@Override

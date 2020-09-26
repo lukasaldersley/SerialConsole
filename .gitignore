@@ -1,1 +1,2 @@
-lib/jSerialComm-*.jar
+lib/jSerialComm*.jar
+/bin/
