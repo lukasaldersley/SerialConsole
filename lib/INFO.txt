@@ -1,0 +1,1 @@
+Download the jSerialComm jar from https://fazecast.github.io/jSerialComm/ and place it in this folder.

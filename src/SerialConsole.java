@@ -15,6 +15,7 @@ import java.net.URL;
 import java.util.Properties;
 
 import javax.swing.Box;
+import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JFileChooser;
@@ -48,16 +49,25 @@ public class SerialConsole implements ActionListener, KeyListener {
 	private JComboBox<Integer> baudSelection;
 	private JComboBox<String> lineEndingSelection;
 	private JComboBox<String> portSelection;
+	private JComboBox<String> flowControlSelection;
 	private final Integer[] baudrates = { 9600, 19200, 38400, 115200 };
 	private final String[] lineEndingNames = { "CRLF (\\r\\n)", "LF (\\n)", "NONE" };
 	private final String[] lineEndings = { "\r\n", "\n", "" };
+	private final String[] lineEndingCharStrings = { "\\r\\n", "\\n", "" };
+	private final int[] flowControlOptions = { SerialPort.FLOW_CONTROL_DISABLED,
+			(SerialPort.FLOW_CONTROL_XONXOFF_IN_ENABLED | SerialPort.FLOW_CONTROL_XONXOFF_OUT_ENABLED),
+			(SerialPort.FLOW_CONTROL_RTS_ENABLED | SerialPort.FLOW_CONTROL_CTS_ENABLED),
+			(SerialPort.FLOW_CONTROL_DSR_ENABLED | SerialPort.FLOW_CONTROL_DTR_ENABLED) };
+	private final String[] flowControlOptionStrings = { "NONE", "XON/XOFF", "RTS/CTS", "DSR/DTR" };
 	private SerialPort chosenPort;
 	private SerialPort[] ports;
 	private String[] portnames;
 	final JFileChooser FileChooser = new JFileChooser();
 
 	private boolean enabled = false;
-	private boolean showTransmissions = false;
+	private boolean showTransmissions = true;
+
+	// boolean rxen=false;
 
 	private SerialPortDataListener spdl;
 
@@ -72,12 +82,11 @@ public class SerialConsole implements ActionListener, KeyListener {
 				new SerialConsole(true, false, args[1], args[2], "", "");
 			} else if (args[0].equals("UPDATED_BOTH")) {
 				new SerialConsole(true, true, args[1], args[2], args[3], args[4]);
-			}
-			else {
+			} else {
 				new SerialConsole(false, false, "", "", "", "");
 			}
 		} else {
-			JFrame f=new JFrame();
+			JFrame f = new JFrame();
 			f.setUndecorated(true);
 			f.add(new JLabel("PLEASE WAIT - SerialMonitor is looking for Updates"));
 			f.setSize(300, 60);
@@ -117,20 +126,22 @@ public class SerialConsole implements ActionListener, KeyListener {
 			String libVersion = "";
 
 			try {
-				BufferedReader br = new BufferedReader(new InputStreamReader(new URL("https://github.com/Fazecast/jSerialComm/releases/latest").openStream()));
+				BufferedReader br = new BufferedReader(new InputStreamReader(
+						new URL("https://github.com/Fazecast/jSerialComm/releases/latest").openStream()));
 				String line = br.readLine();
 				while (line != null) {
 					if (line.contains(".jar\"")) {
 						libDownloadPath += line.substring(line.indexOf("/Fazecast"),
 								line.indexOf("\" rel=\"nofollow\""));
-						libVersion = libDownloadPath.substring(libDownloadPath.indexOf("jSerialComm-") + 12,libDownloadPath.indexOf(".jar"));
+						libVersion = libDownloadPath.substring(libDownloadPath.indexOf("jSerialComm-") + 12,
+								libDownloadPath.indexOf(".jar"));
 						break;
 					}
 					line = br.readLine();
 				}
 			} catch (IOException e) {
 				e.printStackTrace();
-				return;//couldn't get/parse update information => abort check
+				return;// couldn't get/parse update information => abort check
 			}
 
 			boolean newerVersionAvailable = false;
@@ -140,20 +151,21 @@ public class SerialConsole implements ActionListener, KeyListener {
 			for (int i = 0; i < 3; i++) {
 				int rm = Integer.parseInt(remote[i]);
 				int lc = Integer.parseInt(local[i]);
-				System.out.println(remote[i]+"|"+local[i]);
+				System.out.println(remote[i] + "|" + local[i]);
 				if (rm > lc) {
 					newerVersionAvailable = true;
 					break;
 				} else if (rm < lc) {
-					break;//the local verion is MORE current than the remote version => CERTAINLY no update needed (this isn't going to happen)
+					break;// the local verion is MORE current than the remote version => CERTAINLY no
+							// update needed (this isn't going to happen)
 				}
 			}
 			if (newerVersionAvailable) {
 				f = new File("SerialConsole_lib/jSerialComm.jar");
 				f.renameTo(new File("SerialConsole_lib/jSerialComm_old.jar"));
-				f = new File("SerialConsole_lib/jSerialComm_old.jar");//probably unneccessary but I don't really care
+				f = new File("SerialConsole_lib/jSerialComm_old.jar");// probably unneccessary but I don't really care
 				if (Tools.downloadJarfile(libDownloadPath, "SerialConsole_lib/jSerialComm.jar")) {
-					f.delete();//dowload succeded => delete old version
+					f.delete();// dowload succeded => delete old version
 					try {
 						Runtime.getRuntime()
 								.exec("java -jar SerialConsole.jar UPDATED_LIB " + oldVersion + " " + libVersion);
@@ -162,11 +174,10 @@ public class SerialConsole implements ActionListener, KeyListener {
 						e.printStackTrace();
 					}
 				} else {
-					f.renameTo(new File("SerialConsole_lib/jSerialComm.jar"));//download failed => restore old version
+					f.renameTo(new File("SerialConsole_lib/jSerialComm.jar"));// download failed => restore old version
 				}
 			}
-		}
-		else {
+		} else {
 			System.out.println("running out of IDE => skipping version checks");
 		}
 	}
@@ -188,11 +199,38 @@ public class SerialConsole implements ActionListener, KeyListener {
 		for (String s : portnames) {
 			portSelection.addItem(s);
 		}
-		portSelection.setSelectedIndex(0);
+		int preselectedPort = -1;
+		for (int i = 0; i < portSelection.getItemCount(); i++) {
+			if (portSelection.getItemAt(i).contains("FT232R")) {
+				preselectedPort = i;
+				break;
+			}
+		}
+		if (preselectedPort == -1) {
+			for (int i = 0; i < portSelection.getItemCount(); i++) {
+				if (portSelection.getItemAt(i).contains("CH340")) {
+					preselectedPort = i;
+					break;
+				}
+			}
+		}
+		if (preselectedPort == -1) {
+			for (int i = 0; i < portSelection.getItemCount(); i++) {
+				if (portSelection.getItemAt(i).contains("Arduino")) {
+					preselectedPort = i;
+					break;
+				}
+			}
+		}
+		if (preselectedPort == -1) {
+			preselectedPort = 0;
+		}
+		portSelection.setSelectedIndex(preselectedPort);
 	}
 
-	public SerialConsole(boolean selfUpdated,boolean libUpdated,String selfOldVer,String selfNewVer,String libOldVer,String libNewVer) {
-		System.out.println("Using jSerialComm verion: "+SerialPort.getVersion());
+	public SerialConsole(boolean selfUpdated, boolean libUpdated, String selfOldVer, String selfNewVer,
+			String libOldVer, String libNewVer) {
+		System.out.println("Using jSerialComm verion: " + SerialPort.getVersion());
 		/// create and setup top bar
 		inputBox = Box.createHorizontalBox();
 		inputBox.add(Box.createHorizontalGlue());
@@ -231,6 +269,10 @@ public class SerialConsole implements ActionListener, KeyListener {
 		lineEndingSelection = new JComboBox<String>(lineEndingNames);
 		lineEndingSelection.addActionListener(this);
 
+		flowControlSelection = new JComboBox<String>(flowControlOptionStrings);
+		flowControlSelection.setSelectedIndex(1);
+		flowControlSelection.addActionListener(this);
+
 		saveContents = new JButton("SAVE");
 		saveContents.addActionListener(this);
 
@@ -243,23 +285,36 @@ public class SerialConsole implements ActionListener, KeyListener {
 		/// end create and setup lower controls
 
 		/// create and setup lower panel
+		JPanel selectorPanelUpper = new JPanel();
+		selectorPanelUpper.setLayout(new FlowLayout());
+		selectorPanelUpper.add(portSelection);
+		selectorPanelUpper.add(refreshButton);
+		// selectorPanel.add(baudSelection);
+		// selectorPanel.add(lineEndingSelection);
+		selectorPanelUpper.add(saveContents);
+		selectorPanelUpper.add(clearOutputButton);
+		selectorPanelUpper.add(connectDisconnectButton);
+
+		JPanel selectorPanelLower = new JPanel();
+		selectorPanelLower.setLayout(new FlowLayout());
+		selectorPanelLower.add(baudSelection);
+		selectorPanelLower.add(lineEndingSelection);
+		selectorPanelLower.add(flowControlSelection);
+
 		selectorPanel = new JPanel();
-		selectorPanel.setLayout(new FlowLayout());
-		selectorPanel.add(portSelection);
-		selectorPanel.add(refreshButton);
-		selectorPanel.add(baudSelection);
-		selectorPanel.add(lineEndingSelection);
-		selectorPanel.add(saveContents);
-		selectorPanel.add(clearOutputButton);
-		selectorPanel.add(connectDisconnectButton);
+		selectorPanel.setLayout(new BoxLayout(selectorPanel, BoxLayout.Y_AXIS));
+		selectorPanel.add(selectorPanelUpper);
+		selectorPanel.add(selectorPanelLower);
 		selectorPanel.addKeyListener(this);
+
 		/// end create and setup lower panel
 
 		/// gather information on available serial ports
 		setupSerial();
-		for (String s : portnames) {
-			portSelection.addItem(s);
-		}
+		// for (String s : portnames) {
+		// portSelection.addItem(s);
+		// }
+		refreshPorts();
 		/// end gather information on available serial ports
 
 		/// create and setup main window
@@ -268,8 +323,8 @@ public class SerialConsole implements ActionListener, KeyListener {
 		mainWindow.add(outputScroller, BorderLayout.CENTER);
 		mainWindow.add(selectorPanel, BorderLayout.PAGE_END);
 
-		mainWindow.setSize(new Dimension(800, 480));
-		mainWindow.validate();
+		mainWindow.setSize(new Dimension(1000, 600));
+		// mainWindow.validate();
 		mainWindow.setVisible(true);
 		mainWindow.setLocationRelativeTo(null);
 		mainWindow.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -288,12 +343,14 @@ public class SerialConsole implements ActionListener, KeyListener {
 				if (event.getEventType() != SerialPort.LISTENING_EVENT_DATA_AVAILABLE) {
 					return;
 				}
+				// if(rxen){
 				byte[] newData = new byte[chosenPort.bytesAvailable()];
 				chosenPort.readBytes(newData, chosenPort.bytesAvailable());
 				// System.out.println("Read " + numRead + " bytes.");
 				for (byte b : newData) {
 					append((char) b);
 				}
+				// }
 			}
 		};
 
@@ -324,9 +381,10 @@ public class SerialConsole implements ActionListener, KeyListener {
 		} else {
 			chosenPort = ports[portSelection.getSelectedIndex()];
 			append("--connecting to " + portnames[portSelection.getSelectedIndex()] + " @ "
-					+ baudSelection.getSelectedItem() + " baud--\r\n");
+					+ baudSelection.getSelectedItem() + " baud with flowcontrol: "
+					+ flowControlOptionStrings[flowControlSelection.getSelectedIndex()] + "--\r\n");
 			chosenPort.setBaudRate((int) baudSelection.getSelectedItem());
-			chosenPort.setFlowControl(SerialPort.FLOW_CONTROL_DISABLED);
+			chosenPort.setFlowControl(flowControlOptions[flowControlSelection.getSelectedIndex()]);
 			chosenPort.setNumDataBits(8);
 			chosenPort.setNumStopBits(1);
 			chosenPort.setParity(SerialPort.NO_PARITY);
@@ -386,20 +444,25 @@ public class SerialConsole implements ActionListener, KeyListener {
 	}
 
 	private void send() {
+		/*
+		 * if(input.getText().equals("RXEN=TRUE;")){ rxen=true; }
+		 * if(input.getText().equals("RXEN=FALSE;")){ rxen=false; }
+		 */
 		if (chosenPort != null && enabled) {
 			char[] c = (input.getText() + lineEndings[lineEndingSelection.getSelectedIndex()]).toCharArray();
 			byte[] b = new byte[c.length];
 			for (int i = 0; i < c.length; i++) {
 				b[i] = (byte) c[i];
 			}
-			chosenPort.writeBytes(b, b.length);
 			if (showTransmissions) {
 				System.out.println(bytesSinceLineBreak);
 				if (bytesSinceLineBreak > 0) {
 					append("\r\n");
 				}
-				append("> " + input.getText() + "\r\n");
+				append("[TX: \"" + input.getText() + lineEndingCharStrings[lineEndingSelection.getSelectedIndex()]
+						+ "\"]\r\n");
 			}
+			chosenPort.writeBytes(b, b.length);
 			input.setText("");
 		} else {
 			append("--please connect to a device first--\r\n");
