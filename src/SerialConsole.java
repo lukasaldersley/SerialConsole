@@ -260,7 +260,7 @@ public class SerialConsole implements ActionListener, KeyListener {
 		portSelection = new JComboBox<String>();
 		portSelection.addActionListener(this);
 
-		refreshButton = new JButton("reload");
+		refreshButton = new JButton("Reload Ports");
 		refreshButton.addActionListener(this);
 
 		baudSelection = new JComboBox<Integer>(baudrates);
