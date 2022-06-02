@@ -1,6 +1,7 @@
 import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
+import java.awt.Font;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
@@ -250,6 +251,12 @@ public class SerialConsole implements ActionListener, KeyListener {
 		output = new JTextArea();
 		output.setEditable(false);
 		output.addKeyListener(this);
+		Font originalFont=output.getFont();
+		// System.out.println(originalFont.getFontName());
+		// System.out.println(originalFont.getStyle());
+		// System.out.println(originalFont.getSize());
+		//the default font is fine, but it's really quite small, so I increase it from 12 to 18 here
+		output.setFont(new Font(originalFont.getName(),originalFont.getStyle(),18));
 
 		outputScroller = new JScrollPane(output);
 		outputScroller.addKeyListener(this);
@@ -289,8 +296,6 @@ public class SerialConsole implements ActionListener, KeyListener {
 		selectorPanelUpper.setLayout(new FlowLayout());
 		selectorPanelUpper.add(portSelection);
 		selectorPanelUpper.add(refreshButton);
-		// selectorPanel.add(baudSelection);
-		// selectorPanel.add(lineEndingSelection);
 		selectorPanelUpper.add(saveContents);
 		selectorPanelUpper.add(clearOutputButton);
 		selectorPanelUpper.add(connectDisconnectButton);
@@ -298,6 +303,7 @@ public class SerialConsole implements ActionListener, KeyListener {
 		JPanel selectorPanelLower = new JPanel();
 		selectorPanelLower.setLayout(new FlowLayout());
 		selectorPanelLower.add(baudSelection);
+		baudSelection.setSelectedIndex(3);
 		selectorPanelLower.add(lineEndingSelection);
 		selectorPanelLower.add(flowControlSelection);
 
@@ -344,9 +350,13 @@ public class SerialConsole implements ActionListener, KeyListener {
 					return;
 				}
 				// if(rxen){
-				byte[] newData = new byte[chosenPort.bytesAvailable()];
-				chosenPort.readBytes(newData, chosenPort.bytesAvailable());
+					int avail=chosenPort.bytesAvailable();
+				byte[] newData = new byte[avail];
+				int reallyread=chosenPort.readBytes(newData, chosenPort.bytesAvailable());//attention this sort of dies every now and then if I send a load of stuff to it
 				// System.out.println("Read " + numRead + " bytes.");
+				if(reallyread!=avail){
+					System.out.println("Missmatch between read and expected byte number in serialEvent");
+				}
 				for (byte b : newData) {
 					append((char) b);
 				}
@@ -372,6 +382,9 @@ public class SerialConsole implements ActionListener, KeyListener {
 			reload();
 		} else if (e.getSource() == connectDisconnectButton) {
 			connectDisconnect();
+		}
+		else if(e.getSource()==saveContents){
+			Save();
 		}
 	}
 
@@ -516,6 +529,17 @@ public class SerialConsole implements ActionListener, KeyListener {
 		} else if (e.isControlDown() && e.getKeyCode() == KeyEvent.VK_R) {
 			System.out.println("Ctrl+R");
 			reload();
+		}
+		else if(e.getKeyCode()==KeyEvent.VK_UP){
+			//recall last
+		}
+		else if(e.getKeyCode()==KeyEvent.VK_DOWN){
+			if(e.isControlDown()){
+				//jump to last
+			}
+			else{
+				//undo recall
+			}
 		}
 	}
 
