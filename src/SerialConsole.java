@@ -1,35 +1,12 @@
-import java.awt.BorderLayout;
-import java.awt.Dimension;
-import java.awt.FlowLayout;
-import java.awt.Font;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.awt.event.KeyEvent;
-import java.awt.event.KeyListener;
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.InputStreamReader;
+import java.awt.*;
+import java.awt.event.*;
+import java.io.*;
 import java.net.URL;
 import java.util.Properties;
 
-import javax.swing.Box;
-import javax.swing.BoxLayout;
-import javax.swing.JButton;
-import javax.swing.JComboBox;
-import javax.swing.JFileChooser;
-import javax.swing.JFrame;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.JTextArea;
-import javax.swing.JTextField;
+import javax.swing.*;
 
-import com.fazecast.jSerialComm.SerialPort;
-import com.fazecast.jSerialComm.SerialPortDataListener;
-import com.fazecast.jSerialComm.SerialPortEvent;
+import com.fazecast.jSerialComm.*;
 
 public class SerialConsole implements ActionListener, KeyListener {
 	private JFrame mainWindow;
@@ -67,8 +44,9 @@ public class SerialConsole implements ActionListener, KeyListener {
 
 	private boolean enabled = false;
 	private boolean showTransmissions = true;
+	private boolean InputHistoryEnabled=true;
 
-	// boolean rxen=false;
+	private CommandHistory commandHistory;
 
 	private SerialPortDataListener spdl;
 
@@ -229,8 +207,9 @@ public class SerialConsole implements ActionListener, KeyListener {
 		portSelection.setSelectedIndex(preselectedPort);
 	}
 
-	public SerialConsole(boolean selfUpdated, boolean libUpdated, String selfOldVer, String selfNewVer,
-			String libOldVer, String libNewVer) {
+	public SerialConsole(boolean selfUpdated, boolean libUpdated, String selfOldVer, String selfNewVer,	String libOldVer, String libNewVer) {
+		commandHistory=new CommandHistory();
+
 		System.out.println("Using jSerialComm verion: " + SerialPort.getVersion());
 		/// create and setup top bar
 		inputBox = Box.createHorizontalBox();
@@ -462,7 +441,8 @@ public class SerialConsole implements ActionListener, KeyListener {
 		 * if(input.getText().equals("RXEN=FALSE;")){ rxen=false; }
 		 */
 		if (chosenPort != null && enabled) {
-			char[] c = (input.getText() + lineEndings[lineEndingSelection.getSelectedIndex()]).toCharArray();
+			String command=input.getText();
+			char[] c = (command + lineEndings[lineEndingSelection.getSelectedIndex()]).toCharArray();
 			byte[] b = new byte[c.length];
 			for (int i = 0; i < c.length; i++) {
 				b[i] = (byte) c[i];
@@ -472,8 +452,11 @@ public class SerialConsole implements ActionListener, KeyListener {
 				if (bytesSinceLineBreak > 0) {
 					append("\r\n");
 				}
-				append("[TX: \"" + input.getText() + lineEndingCharStrings[lineEndingSelection.getSelectedIndex()]
+				append("[TX: \"" + command + lineEndingCharStrings[lineEndingSelection.getSelectedIndex()]
 						+ "\"]\r\n");
+			}
+			if(InputHistoryEnabled){
+				commandHistory.Insert(command);
 			}
 			chosenPort.writeBytes(b, b.length);
 			input.setText("");
@@ -531,15 +514,25 @@ public class SerialConsole implements ActionListener, KeyListener {
 			reload();
 		}
 		else if(e.getKeyCode()==KeyEvent.VK_UP){
-			//recall last
+			System.out.println("Arrow UP");
+			input.setText(commandHistory.Previous());
+		}
+		else if(e.isControlDown() && e.getKeyCode() == KeyEvent.VK_U){
+			System.out.println("Ctrl+U");
+			input.setText(commandHistory.Newest());
 		}
 		else if(e.getKeyCode()==KeyEvent.VK_DOWN){
 			if(e.isControlDown()){
-				//jump to last
+				System.out.println("Ctrl+Arrow DOWN");
+				input.setText(commandHistory.NewestReal());
 			}
 			else{
-				//undo recall
+				System.out.println("Arrow DOWN");
+				input.setText(commandHistory.Next());
 			}
+		}
+		else if(e.getKeyCode()==KeyEvent.VK_P&&e.isControlDown()&&e.isAltDown()){
+			commandHistory.DebugPrint();
 		}
 	}
 
