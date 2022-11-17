@@ -1,3 +1,5 @@
 lib/jSerialComm*.jar
 /bin/
 hs_err_pid*.log
+*.class
+SerialConsole.jar
